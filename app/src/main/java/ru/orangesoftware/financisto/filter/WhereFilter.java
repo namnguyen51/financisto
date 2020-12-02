@@ -10,6 +10,11 @@
  ******************************************************************************/
 package ru.orangesoftware.financisto.filter;
 
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import android.os.Bundle;
+
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -17,20 +22,19 @@ import java.util.List;
 
 import ru.orangesoftware.financisto.activity.DateFilterActivity;
 import ru.orangesoftware.financisto.blotter.BlotterFilter;
-import ru.orangesoftware.financisto.utils.Utils;
 import ru.orangesoftware.financisto.datetime.PeriodType;
+import ru.orangesoftware.financisto.utils.ArrUtils;
+import ru.orangesoftware.financisto.utils.StringUtil;
 import ru.orangesoftware.orb.Expression;
 import ru.orangesoftware.orb.Expressions;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.SharedPreferences.Editor;
-import android.os.Bundle;
+
+import static ru.orangesoftware.orb.EntityManager.DEF_SORT_COL;
 
 public class WhereFilter {
 	
 	public static final String TITLE_EXTRA = "title";
     public static final String FILTER_EXTRA = "filter";
-    public static final String SORT_ORDER_EXTRA = "sort_order";
+    public static final String SORT_ORDER_EXTRA = DEF_SORT_COL;
 
     public static final String FILTER_TITLE_PREF = "filterTitle";
     public static final String FILTER_LENGTH_PREF = "filterLength";
@@ -38,8 +42,8 @@ public class WhereFilter {
     public static final String FILTER_SORT_ORDER_PREF = "filterSortOrder";
 
 	private final String title;
-	private final LinkedList<Criteria> criterias = new LinkedList<Criteria>();
-	private final LinkedList<String> sorts = new LinkedList<String>();
+	private final LinkedList<Criteria> criterias = new LinkedList<>();
+	private final LinkedList<String> sorts = new LinkedList<>();
 
 	public WhereFilter(String title) {
 		this.title = title;
@@ -100,6 +104,11 @@ public class WhereFilter {
 		return this;
 	}
 
+	public WhereFilter contains(String column, String text){
+		criterias.add(Criteria.like(column, String.format("%%%s%%", text)));
+		return this;
+	}
+
 	private String getSelection(List<Criteria> criterias) {
 		StringBuilder sb = new StringBuilder();
 		for (Criteria c : criterias) {
@@ -114,7 +123,7 @@ public class WhereFilter {
 	private String[] getSelectionArgs(List<Criteria> criterias) {
 		String[] args = new String[0];
 		for (Criteria c : criterias) {
-			args = Utils.joinArrays(args, c.getSelectionArgs());
+			args = ArrUtils.joinArrays(args, c.getSelectionArgs());
 		}
 		return args;
 	}
@@ -311,14 +320,41 @@ public class WhereFilter {
 		return criterias.isEmpty();
 	}
 	
-	public static enum Operation {
-		NOPE(""), EQ("=?"), NEQ("!=?"), GT(">?"), GTE(">=?"), LT("<?"), LTE("<=?"), BTW("BETWEEN ? AND ?"), ISNULL("is NULL"), LIKE("LIKE ?");
+	public enum Operation {
+		NOPE(""), EQ("=?"), NEQ("!=?"), GT(">?"), GTE(">=?"), LT("<?"), LTE("<=?"), BTW("BETWEEN ? AND ?", "OR", 2), 
+		IN("IN (?)") {
+			@Override
+			public String getOp(int operands) {
+				return super.getOp(operands).replace("?", StringUtil.generateSeparated("?", ",", operands));
+			}
+		}, 
+		ISNULL("is NULL"), LIKE("LIKE ?");
 		
-		public final String op;
+		private final String op;
+		private final String groupOp;
+		private final int valsPerGroup;
+
+		Operation(String op) {
+			this(op, null, 1);
+		}
 		
-		private Operation(String op) {
+		Operation(String op, String groupOp, int valsPerGroup) {
 			this.op = op;
-		}		
+			this.groupOp = groupOp;
+			this.valsPerGroup = valsPerGroup;
+		}
+
+		public String getOp(int ignore) {
+			return op;
+		}
+
+		public String getGroupOp() {
+			return groupOp;
+		}
+
+		public int getValsPerGroup() {
+			return valsPerGroup;
+		}
 	}
 
     public void clearDateTime() {

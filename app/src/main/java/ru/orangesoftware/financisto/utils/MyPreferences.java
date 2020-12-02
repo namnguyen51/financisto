@@ -1,15 +1,3 @@
-/*******************************************************************************
- * Copyright (c) 2010 Denis Solonenko.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
- * <p/>
- * Contributors:
- * Denis Solonenko - initial API and implementation
- * Rodrigo Sousa - google docs backup
- * Abdsandryk Souza - report preferences
- ******************************************************************************/
 package ru.orangesoftware.financisto.utils;
 
 import android.content.Context;
@@ -35,6 +23,8 @@ public class MyPreferences {
 
     private static final String DROPBOX_AUTH_TOKEN = "dropbox_auth_token";
     private static final String DROPBOX_AUTHORIZE = "dropbox_authorize";
+    private static final String ENTITY_SELECTOR_LIST = "list";
+    private static final String ENTITY_SELECTOR_FILTER = "filter";
 
     public enum AccountSortOrder {
         SORT_ORDER_ASC("sortOrder", true),
@@ -54,12 +44,40 @@ public class MyPreferences {
 
     public enum LocationsSortOrder {
         FREQUENCY("count", false),
-        NAME("name", true);
+        TITLE("title", true);
 
         public final String property;
         public final boolean asc;
 
         LocationsSortOrder(String property, boolean asc) {
+            this.property = property;
+            this.asc = asc;
+        }
+    }
+
+    public enum TemplatesSortOrder {
+        DATE("datetime", false),
+        NAME("template_name", true),
+        ACCOUNT("from_account", true);
+
+        public final String property;
+        public final boolean asc;
+
+        TemplatesSortOrder(String property, boolean asc) {
+            this.property = property;
+            this.asc = asc;
+        }
+    }
+
+    public enum BudgetsSortOrder {
+        DATE("startDate", false),
+        NAME("title", true),
+        AMOUNT("amount", false);
+
+        public final String property;
+        public final boolean asc;
+
+        BudgetsSortOrder(String property, boolean asc) {
             this.property = property;
             this.asc = asc;
         }
@@ -133,8 +151,23 @@ public class MyPreferences {
 
     public static LocationsSortOrder getLocationsSortOrder(Context context) {
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
-        String sortOrder = sharedPreferences.getString("sort_locations", LocationsSortOrder.NAME.name());
+        String sortOrder = sharedPreferences.getString("sort_locations", LocationsSortOrder.TITLE.name());
+        if ("NAME".equals(sortOrder)) {
+            sortOrder = "TITLE";
+        }
         return LocationsSortOrder.valueOf(sortOrder);
+    }
+
+    public static TemplatesSortOrder getTemplatesSortOrder(Context context) {
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
+        String sortOrder = sharedPreferences.getString("sort_templates", TemplatesSortOrder.DATE.name());
+        return TemplatesSortOrder.valueOf(sortOrder);
+    }
+
+    public static BudgetsSortOrder getBudgetsSortOrder(Context context) {
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
+        String sortOrder = sharedPreferences.getString("sort_budgets", BudgetsSortOrder.DATE.name());
+        return BudgetsSortOrder.valueOf(sortOrder);
     }
 
     public static long getLastAccount(Context context) {
@@ -192,6 +225,11 @@ public class MyPreferences {
         return sharedPreferences.getBoolean("ntsl_show_currency", true);
     }
 
+    public static boolean isEnterCurrencyDecimalPlaces(Context context) {
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
+        return sharedPreferences.getBoolean("ntsl_enter_currency_decimal_places", true);
+    }
+
     public static int getPayeeOrder(Context context) {
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
         return Integer.parseInt(sharedPreferences.getString("ntsl_show_payee_order", "1"));
@@ -217,6 +255,24 @@ public class MyPreferences {
         return sharedPreferences.getBoolean("ntsl_open_calculator_for_template_transactions", true);
     }
 
+    public static boolean isSetFocusOnAmountField(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context).getBoolean("ntsl_set_focus_on_amount_field", false);
+    }
+
+    public static boolean isPayeeSelectorList(Context context) {
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
+        return ENTITY_SELECTOR_LIST.equals(sharedPreferences.getString("payee_selector", ENTITY_SELECTOR_FILTER));
+    }
+
+    public static boolean isProjectSelectorList(Context context) {
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
+        return ENTITY_SELECTOR_LIST.equals(sharedPreferences.getString("project_selector", ENTITY_SELECTOR_FILTER));
+    }
+
+    public static boolean isLocationSelectorList(Context context) {
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
+        return ENTITY_SELECTOR_LIST.equals(sharedPreferences.getString("location_selector", ENTITY_SELECTOR_FILTER));
+    }
 
     /**
      * Get google docs user login registered on preferences

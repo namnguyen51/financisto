@@ -1,34 +1,21 @@
-/*******************************************************************************
- * Copyright (c) 2010 Denis Solonenko.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
- *
- * Contributors:
- *     Denis Solonenko - initial API and implementation
- ******************************************************************************/
 package ru.orangesoftware.financisto.view;
 
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
-import android.support.v4.content.FileProvider;
+import androidx.core.content.FileProvider;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
-import android.widget.CheckBox;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.RelativeLayout;
+import android.widget.*;
 import android.widget.RelativeLayout.LayoutParams;
-import android.widget.TextView;
-
 import ru.orangesoftware.financisto.BuildConfig;
 import ru.orangesoftware.financisto.R;
 import ru.orangesoftware.financisto.utils.PicturesUtil;
 
+import static android.view.View.GONE;
+import static android.view.View.VISIBLE;
 import static ru.orangesoftware.financisto.activity.RequestPermission.isRequestingPermission;
 
 public class NodeInflater {
@@ -134,16 +121,38 @@ public class NodeInflater {
 
         public ListBuilder withButtonId(int buttonId, OnClickListener listener) {
             ImageView plusImageView = v.findViewById(R.id.plus_minus);
+            if (buttonId > 0) {
+                plusImageView.setVisibility(VISIBLE);
+                plusImageView.setId(buttonId);
+                plusImageView.setOnClickListener(listener);
+            } else {
+                plusImageView.setVisibility(GONE);
+            }
+            return this;
+        }
+
+        public ListBuilder withClearButtonId(int buttonId, OnClickListener listener) {
+            ImageView plusImageView = v.findViewById(R.id.bMinus);
             plusImageView.setId(buttonId);
             plusImageView.setOnClickListener(listener);
             return this;
         }
 
-        public ListBuilder withoutMoreButton() {
-            v.findViewById(R.id.more).setVisibility(View.GONE);
+        public ListBuilder withAutoCompleteFilter(OnClickListener listener, int listId) {
+            AutoCompleteTextView autoCompleteTxt = v.findViewById(R.id.autocomplete_filter);
+            autoCompleteTxt.setFocusableInTouchMode(true);
+
+            View view = v.findViewById(R.id.show_list);
+            view.setId(listId);
+            view.setOnClickListener(listener);
+
             return this;
         }
 
+        public ListBuilder withoutMoreButton() {
+            v.findViewById(R.id.more).setVisibility(GONE);
+            return this;
+        }
     }
 
     public class CheckBoxBuilder extends Builder {
@@ -169,7 +178,7 @@ public class NodeInflater {
         @Override
         public ListBuilder withButtonId(int buttonId, OnClickListener listener) {
             ImageView plusImageView = v.findViewById(R.id.plus_minus);
-            plusImageView.setVisibility(View.VISIBLE);
+            plusImageView.setVisibility(VISIBLE);
             return super.withButtonId(buttonId, listener);
         }
 

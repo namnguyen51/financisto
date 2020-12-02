@@ -16,9 +16,9 @@ import android.app.PendingIntent;
 import static android.app.PendingIntent.FLAG_CANCEL_CURRENT;
 import android.content.Context;
 import android.content.Intent;
-import android.support.annotation.NonNull;
-import android.support.v4.app.JobIntentService;
-import android.support.v4.app.NotificationCompat;
+import androidx.annotation.NonNull;
+import androidx.core.app.JobIntentService;
+import androidx.core.app.NotificationCompat;
 import android.util.Log;
 import java.util.Date;
 import ru.orangesoftware.financisto.R;
@@ -111,9 +111,13 @@ public class FinancistoService extends JobIntentService {
                 shouldSaveSmsToTransactionNote(this));
             if (t != null) {
                 TransactionInfo transactionInfo = db.getTransactionInfo(t.id);
-                Notification notification = createSmsTransactionNotification(transactionInfo, number);
-                notifyUser(notification, (int) t.id);
-                AccountWidget.updateWidgets(this);
+                if (transactionInfo != null) {
+                    Notification notification = createSmsTransactionNotification(transactionInfo, number);
+                    notifyUser(notification, (int) t.id);
+                    AccountWidget.updateWidgets(this);
+                } else {
+                    Log.e("Financisto", "Transaction info does not exist for "+t.id);
+                }
             }
         }
     }

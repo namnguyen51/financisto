@@ -1,13 +1,3 @@
-/*******************************************************************************
- * Copyright (c) 2010 Denis Solonenko.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
- * <p/>
- * Contributors:
- * Denis Solonenko - initial API and implementation
- ******************************************************************************/
 package ru.orangesoftware.financisto.activity;
 
 import android.Manifest;
@@ -18,17 +8,7 @@ import android.text.InputType;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
-import android.widget.ArrayAdapter;
-import android.widget.AutoCompleteTextView;
-import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.EditText;
-import android.widget.ImageButton;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.ListAdapter;
-import android.widget.SimpleCursorAdapter;
-import android.widget.TextView;
+import android.widget.*;
 
 import com.mlsdev.rximagepicker.RxImageConverters;
 import com.mlsdev.rximagepicker.RxImagePicker;
@@ -36,26 +16,14 @@ import com.mlsdev.rximagepicker.Sources;
 import com.wdullaer.materialdatetimepicker.date.DatePickerDialog;
 import com.wdullaer.materialdatetimepicker.time.TimePickerDialog;
 
-import java.text.DateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.List;
-
 import greendroid.widget.QuickActionGrid;
 import greendroid.widget.QuickActionWidget;
-import io.reactivex.disposables.Disposable;
+import io.reactivex.disposables.CompositeDisposable;
 import ru.orangesoftware.financisto.R;
 import ru.orangesoftware.financisto.datetime.DateUtils;
 import ru.orangesoftware.financisto.db.DatabaseHelper.AccountColumns;
 import ru.orangesoftware.financisto.db.DatabaseHelper.TransactionColumns;
-import ru.orangesoftware.financisto.model.Account;
-import ru.orangesoftware.financisto.model.Attribute;
-import ru.orangesoftware.financisto.model.Category;
-import ru.orangesoftware.financisto.model.Payee;
-import ru.orangesoftware.financisto.model.SystemAttribute;
-import ru.orangesoftware.financisto.model.Transaction;
-import ru.orangesoftware.financisto.model.TransactionAttribute;
-import ru.orangesoftware.financisto.model.TransactionStatus;
+import ru.orangesoftware.financisto.model.*;
 import ru.orangesoftware.financisto.recur.NotificationOptions;
 import ru.orangesoftware.financisto.recur.Recurrence;
 import ru.orangesoftware.financisto.utils.EnumUtils;
@@ -66,8 +34,16 @@ import ru.orangesoftware.financisto.view.AttributeView;
 import ru.orangesoftware.financisto.view.AttributeViewFactory;
 import ru.orangesoftware.financisto.widget.RateLayoutView;
 
+import java.text.DateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
 import static ru.orangesoftware.financisto.activity.RequestPermission.isRequestingPermission;
 import static ru.orangesoftware.financisto.activity.UiUtils.applyTheme;
+import static ru.orangesoftware.financisto.model.Category.NO_CATEGORY_ID;
+import static ru.orangesoftware.financisto.model.MyLocation.CURRENT_LOCATION_ID;
+import static ru.orangesoftware.financisto.model.Project.NO_PROJECT_ID;
 import static ru.orangesoftware.financisto.utils.Utils.text;
 
 public abstract class AbstractTransactionActivity extends AbstractActivity implements CategorySelector.CategorySelectorListener {
@@ -111,10 +87,12 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
     protected String notificationOptions;
 
     protected boolean isDuplicate = false;
+    protected boolean isShowPayee = true;
 
-    protected ProjectSelector projectSelector;
-    protected LocationSelector locationSelector;
-    protected CategorySelector categorySelector;
+    protected PayeeSelector<AbstractTransactionActivity> payeeSelector;
+    protected ProjectSelector<AbstractTransactionActivity> projectSelector;
+    protected LocationSelector<AbstractTransactionActivity> locationSelector;
+    protected CategorySelector<AbstractTransactionActivity> categorySelector;
 
     protected boolean isRememberLastAccount;
     protected boolean isRememberLastCategory;
@@ -125,10 +103,6 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
     protected boolean isShowIsCCardPayment;
     protected boolean isOpenCalculatorForTemplates;
 
-    protected boolean isShowPayee = true;
-    protected AutoCompleteTextView payeeText;
-    protected SimpleCursorAdapter payeeAdapter;
-
     protected AttributeView deleteAfterExpired;
 
     protected DateFormat df;
@@ -137,6 +111,8 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
     private QuickActionWidget pickImageActionGrid;
 
     protected Transaction transaction = new Transaction();
+
+    protected CompositeDisposable disposable = new CompositeDisposable();
 
     public AbstractTransactionActivity() {
     }
@@ -165,15 +141,9 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
         isShowIsCCardPayment = MyPreferences.isShowIsCCardPayment(this);
         isOpenCalculatorForTemplates = MyPreferences.isOpenCalculatorForTemplates(this);
 
-        categorySelector = new CategorySelector(this, db, x);
+        categorySelector = new CategorySelector<>(this, db, x);
         categorySelector.setListener(this);
         fetchCategories();
-
-        projectSelector = new ProjectSelector(this, db, x);
-        projectSelector.fetchEntities();
-
-        locationSelector = new LocationSelector(this, db, x);
-        locationSelector.fetchEntities();
 
         long accountId = -1;
         long transactionId = -1;
@@ -256,6 +226,12 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
 
         rateView = new RateLayoutView(this, x, layout);
 
+        locationSelector = new LocationSelector<>(this, db, x);
+        locationSelector.fetchEntities();
+
+        projectSelector = new ProjectSelector<>(this, db, x);
+        projectSelector.fetchEntities();
+
         createListNodes(layout);
         categorySelector.createAttributesLayout(layout);
         createCommonNodes(layout);
@@ -294,7 +270,7 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
             editTransaction(transaction);
         } else {
             setDateTime(transaction.dateTime);
-            categorySelector.selectCategory(0);
+            categorySelector.selectCategory(NO_CATEGORY_ID);
             if (accountId != -1) {
                 selectAccount(accountId);
             } else {
@@ -304,10 +280,10 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
                 }
             }
             if (!isRememberLastProject) {
-                projectSelector.selectEntity(0);
+                projectSelector.selectEntity(NO_PROJECT_ID);
             }
             if (!isRememberLastLocation) {
-                locationSelector.selectEntity(0);
+                locationSelector.selectEntity(CURRENT_LOCATION_ID);
             }
             if (transaction.isScheduled()) {
                 selectStatus(TransactionStatus.PN);
@@ -338,25 +314,18 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
 
     protected void requestImage(Sources source) {
         transaction.blobKey = null;
-        RxImagePicker.with(this).requestImage(source)
+        disposable.add(RxImagePicker.with(getFragmentManager()).requestImage(source)
                 .flatMap(uri -> RxImageConverters.uriToFile(this, uri, PicturesUtil.createEmptyImageFile()))
-                .subscribe(file -> selectPicture(file.getName()));
+                .subscribe(
+                        file -> selectPicture(file.getName()),
+                        e -> Toast.makeText(AbstractTransactionActivity.this, "Unable to pick up an image: " + e.getMessage(), Toast.LENGTH_LONG).show()
+                ));
     }
 
     protected void createPayeeNode(LinearLayout layout) {
-        payeeAdapter = TransactionUtils.createPayeeAdapter(this, db);
-        payeeText = new AutoCompleteTextView(this);
-        payeeText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS |
-                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS |
-                InputType.TYPE_TEXT_VARIATION_FILTER);
-        payeeText.setThreshold(1);
-        payeeText.setOnFocusChangeListener((view, hasFocus) -> {
-            if (hasFocus) {
-                payeeText.setAdapter(payeeAdapter);
-                payeeText.selectAll();
-            }
-        });
-        x.addEditNode(layout, R.string.payee, payeeText);
+        payeeSelector = new PayeeSelector<>(this, db, x);
+        payeeSelector.fetchEntities();
+        payeeSelector.createNode(layout);
     }
 
     protected abstract void fetchCategories();
@@ -395,8 +364,7 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
         return attributes;
     }
 
-    protected void internalOnCreate() {
-    }
+    protected abstract void internalOnCreate();
 
     @Override
     protected boolean shouldLock() {
@@ -415,6 +383,7 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
                 if (isShowNote) {
                     //note
                     noteText = new EditText(this);
+                    noteText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
                     x.addEditNode(layout, R.string.note, noteText);
                 }
             }
@@ -439,6 +408,7 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
 
     @Override
     protected void onClick(View v, int id) {
+        if (isShowPayee) payeeSelector.onClick(id);
         projectSelector.onClick(id);
         categorySelector.onClick(id);
         locationSelector.onClick(id);
@@ -480,6 +450,7 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
 
     @Override
     public void onSelectedPos(int id, int selectedPos) {
+        if (isShowPayee) payeeSelector.onSelectedPos(id, selectedPos);
         projectSelector.onSelectedPos(id, selectedPos);
         locationSelector.onSelectedPos(id, selectedPos);
         switch (id) {
@@ -491,7 +462,10 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
 
     @Override
     public void onSelectedId(int id, long selectedId) {
+        if (isShowPayee) payeeSelector.onSelectedId(id, selectedId);
         categorySelector.onSelectedId(id, selectedId);
+        projectSelector.onSelectedId(id, selectedId);
+        locationSelector.onSelectedId(id, selectedId);
         switch (id) {
             case R.id.account:
                 selectAccount(selectedId);
@@ -573,6 +547,9 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
         projectSelector.onActivityResult(requestCode, resultCode, data);
         categorySelector.onActivityResult(requestCode, resultCode, data);
         locationSelector.onActivityResult(requestCode, resultCode, data);
+        if (isShowPayee) {
+            payeeSelector.onActivityResult(requestCode, resultCode, data);
+        }
         if (resultCode == RESULT_OK) {
             switch (requestCode) {
                 case RECURRENCE_REQUEST:
@@ -657,6 +634,15 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
         ccardPayment.setChecked(isCCardPaymentValue == 1);
     }
 
+    protected boolean checkSelectedEntities() {
+        if (isShowPayee) {
+            payeeSelector.createNewEntity();
+        }
+        locationSelector.createNewEntity();
+        projectSelector.createNewEntity();
+        return true;
+    }
+
     protected void updateTransactionFromUI(Transaction transaction) {
         transaction.categoryId = categorySelector.getSelectedCategoryId();
         transaction.projectId = projectSelector.getSelectedEntityId();
@@ -666,8 +652,7 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
         }
         transaction.dateTime = dateTime.getTime().getTime();
         if (isShowPayee) {
-            Payee payee = db.insertPayee(text(payeeText));
-            transaction.payeeId = payee.getId();
+            transaction.payeeId = payeeSelector.getSelectedEntityId();
         }
         if (isShowNote) {
             transaction.note = text(noteText);
@@ -683,16 +668,14 @@ public abstract class AbstractTransactionActivity extends AbstractActivity imple
 
     protected void selectPayee(long payeeId) {
         if (isShowPayee) {
-            Payee p = db.get(Payee.class, payeeId);
-            selectPayee(p);
+            payeeSelector.selectEntity(payeeId);
         }
     }
 
-    protected void selectPayee(Payee p) {
-        if (p != null) {
-            payeeText.setText(p.title);
-            transaction.payeeId = p.id;
-        }
+    @Override
+    protected void onDestroy() {
+        disposable.dispose();
+        if (categorySelector != null) categorySelector.onDestroy();
+        super.onDestroy();
     }
-
 }

@@ -1,153 +1,75 @@
-/*******************************************************************************
- * Copyright (c) 2010 Denis Solonenko.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
- *
- * Contributors:
- *     Denis Solonenko - initial API and implementation
- ******************************************************************************/
 package ru.orangesoftware.financisto.db;
 
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-
 import ru.orangesoftware.financisto.blotter.BlotterFilter;
 import ru.orangesoftware.financisto.datetime.Period;
-
-import static ru.orangesoftware.financisto.db.DatabaseHelper.ACCOUNT_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.AccountColumns;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.BUDGET_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.CURRENCY_TABLE;
-
 import ru.orangesoftware.financisto.filter.Criteria;
 import ru.orangesoftware.financisto.filter.WhereFilter;
-import ru.orangesoftware.financisto.model.Account;
-import ru.orangesoftware.financisto.model.Budget;
-import ru.orangesoftware.financisto.model.Category;
+import ru.orangesoftware.financisto.model.*;
 import ru.orangesoftware.financisto.model.Currency;
-import ru.orangesoftware.financisto.model.MyEntity;
-import ru.orangesoftware.financisto.model.MyLocation;
-import ru.orangesoftware.financisto.model.Payee;
-import ru.orangesoftware.financisto.model.Project;
-import ru.orangesoftware.financisto.model.SystemAttribute;
-import ru.orangesoftware.financisto.model.Transaction;
-import ru.orangesoftware.financisto.model.TransactionAttributeInfo;
-import ru.orangesoftware.financisto.model.TransactionInfo;
 import ru.orangesoftware.financisto.utils.MyPreferences;
 import ru.orangesoftware.financisto.utils.MyPreferences.AccountSortOrder;
 import ru.orangesoftware.financisto.utils.MyPreferences.LocationsSortOrder;
 import ru.orangesoftware.financisto.utils.RecurUtils;
 import ru.orangesoftware.financisto.utils.RecurUtils.Recur;
-
-import static ru.orangesoftware.financisto.utils.StringUtil.capitalize;
-
+import ru.orangesoftware.financisto.utils.StringUtil;
 import ru.orangesoftware.financisto.utils.Utils;
-import ru.orangesoftware.orb.EntityManager;
-import ru.orangesoftware.orb.Expression;
-import ru.orangesoftware.orb.Expressions;
-import ru.orangesoftware.orb.Query;
+import ru.orangesoftware.orb.*;
+
+import java.util.*;
+
+import static ru.orangesoftware.financisto.db.DatabaseHelper.*;
+import static ru.orangesoftware.financisto.utils.StringUtil.capitalize;
 
 public abstract class MyEntityManager extends EntityManager {
 
     protected final Context context;
 
     public MyEntityManager(Context context) {
-        super(DatabaseHelper_.getInstance_(context));
+        super(DatabaseHelper_.getInstance_(context), new DatabaseFixPlugin());
         this.context = context;
     }
 
-    private <T extends MyEntity> ArrayList<T> getAllEntitiesList(Class<T> clazz, boolean include0) {
-        Query<T> q = createQuery(clazz);
-        q.where(include0 ? Expressions.gte("id", 0) : Expressions.gt("id", 0));
-        q.asc("title");
-        Cursor c = q.execute();
-        try {
-            T e0 = null;
-            ArrayList<T> list = new ArrayList<T>();
-            while (c.moveToNext()) {
-                T e = EntityManager.loadFromCursor(c, clazz);
-                if (e.id == 0) {
-                    e0 = e;
-                } else {
-                    list.add(e);
-                }
-            }
-            if (e0 != null) {
-                list.add(0, e0);
-            }
-            return list;
-        } finally {
-            c.close();
-        }
+    public <T extends MyEntity> Cursor filterActiveEntities(Class<T> clazz, String titleLike) {
+        return queryEntities(clazz, titleLike, false, true);
     }
 
-    private <T extends MyEntity> ArrayList<T> getAllEntitiesList(Class<T> clazz, boolean include0, boolean onlyActive) {
+    public <T extends MyEntity> Cursor queryEntities(Class<T> clazz, String titleLike, boolean include0, boolean onlyActive, Sort... sort) {
         Query<T> q = createQuery(clazz);
         Expression include0Ex = include0 ? Expressions.gte("id", 0) : Expressions.gt("id", 0);
+        Expression whereEx = include0Ex;
         if (onlyActive) {
-            q.where(Expressions.and(include0Ex, Expressions.eq("isActive", 1)));
+            whereEx = Expressions.and(include0Ex, Expressions.eq("isActive", 1));
+        }
+        if (!StringUtil.isEmpty(titleLike)) {
+            titleLike = titleLike.replace(" ", "%");
+            whereEx = Expressions.and(whereEx, Expressions.or(
+                    Expressions.like("title", "%" + titleLike + "%"),
+                    Expressions.like("title", "%" + capitalize(titleLike) + "%")
+            ));
+        }
+        q.where(whereEx);
+        if (sort != null && sort.length > 0) {
+            q.sort(sort);
         } else {
-            q.where(include0Ex);
-        }
-        q.asc("title");
-        Cursor c = q.execute();
-        try {
-            T e0 = null;
-            ArrayList<T> list = new ArrayList<T>();
-            while (c.moveToNext()) {
-                T e = EntityManager.loadFromCursor(c, clazz);
-                if (e.id == 0) {
-                    e0 = e;
-                } else {
-                    list.add(e);
-                }
-            }
-            if (e0 != null) {
-                list.add(0, e0);
-            }
-            return list;
-        } finally {
-            c.close();
-        }
-    }
-
-	/* ===============================================
-     * LOCATION
-	 * =============================================== */
-
-    public Cursor getAllLocations(boolean includeCurrentLocation) {
-        Query<MyLocation> q = createQuery(MyLocation.class);
-        if (!includeCurrentLocation) {
-            q.where(Expressions.gt("id", 0));
-        }
-        LocationsSortOrder sortOrder = MyPreferences.getLocationsSortOrder(context);
-        if (sortOrder.asc) {
-            q.asc(sortOrder.property);
-        } else {
-            q.desc(sortOrder.property);
-        }
-        if (sortOrder != LocationsSortOrder.NAME) {
-            q.asc(LocationsSortOrder.NAME.property);
+            q.asc("title");
         }
         return q.execute();
     }
 
-    public List<MyLocation> getAllLocationsList(boolean includeNoLocation) {
-        try (Cursor c = getAllLocations(includeNoLocation)) {
-            MyLocation e0 = null;
-            ArrayList<MyLocation> list = new ArrayList<>();
+    public <T extends MyEntity> ArrayList<T> getAllEntitiesList(Class<T> clazz, boolean include0, boolean onlyActive, Sort... sort) {
+        return getAllEntitiesList(clazz, include0, onlyActive, null, sort);
+    }
+
+    public <T extends MyEntity> ArrayList<T> getAllEntitiesList(Class<T> clazz, boolean include0, boolean onlyActive, String filter, Sort... sort) {
+        try (Cursor c = queryEntities(clazz, filter, include0, onlyActive, sort)) {
+            T e0 = null;
+            ArrayList<T> list = new ArrayList<>();
             while (c.moveToNext()) {
-                MyLocation e = EntityManager.loadFromCursor(c, MyLocation.class);
+                T e = EntityManager.loadFromCursor(c, clazz);
                 if (e.id == 0) {
                     e0 = e;
                 } else {
@@ -161,13 +83,34 @@ public abstract class MyEntityManager extends EntityManager {
         }
     }
 
-    public Map<Long, MyLocation> getAllLocationsByIdMap(boolean includeNoLocation) {
-        List<MyLocation> locations = getAllLocationsList(includeNoLocation);
-        Map<Long, MyLocation> map = new HashMap<Long, MyLocation>();
-        for (MyLocation location : locations) {
-            map.put(location.id, location);
+    /* ===============================================
+     * LOCATION
+     * =============================================== */
+
+    public ArrayList<MyLocation> getAllLocationsList(boolean includeNoLocation) {
+        return getAllEntitiesList(MyLocation.class, includeNoLocation, false, locationSort());
+    }
+
+    public ArrayList<MyLocation> getAllActiveLocationsList() {
+        return getAllEntitiesList(MyLocation.class, true, false, locationSort());
+    }
+
+    public ArrayList<MyLocation> getActiveLocationsList(boolean includeNoLocation) {
+        return getAllEntitiesList(MyLocation.class, includeNoLocation, true, locationSort());
+    }
+
+    private Sort[] locationSort() {
+        List<Sort> sort = new ArrayList<>();
+        LocationsSortOrder sortOrder = MyPreferences.getLocationsSortOrder(context);
+        sort.add(new Sort(sortOrder.property, sortOrder.asc));
+        if (sortOrder != LocationsSortOrder.TITLE) {
+            sort.add(new Sort(LocationsSortOrder.TITLE.property, sortOrder.asc));
         }
-        return map;
+        return sort.toArray(new Sort[0]);
+    }
+
+    public Map<Long, MyLocation> getAllLocationsByIdMap(boolean includeNoLocation) {
+        return entitiesAsIdMap(getAllLocationsList(includeNoLocation));
     }
 
     public void deleteLocation(long id) {
@@ -188,9 +131,9 @@ public abstract class MyEntityManager extends EntityManager {
         return saveOrUpdate(location);
     }
 
-	/* ===============================================
+    /* ===============================================
      * TRANSACTION INFO
-	 * =============================================== */
+     * =============================================== */
 
     public TransactionInfo getTransactionInfo(long transactionId) {
         return get(TransactionInfo.class, transactionId);
@@ -282,21 +225,18 @@ public abstract class MyEntityManager extends EntityManager {
     }
 
     public List<Account> getAllAccountsList() {
-        List<Account> list = new ArrayList<Account>();
-        Cursor c = getAllAccounts();
-        try {
+        List<Account> list = new ArrayList<>();
+        try (Cursor c = getAllAccounts()) {
             while (c.moveToNext()) {
                 Account a = EntityManager.loadFromCursor(c, Account.class);
                 list.add(a);
             }
-        } finally {
-            c.close();
         }
         return list;
     }
 
     public Map<Long, Account> getAllAccountsMap() {
-        Map<Long, Account> accountsMap = new HashMap<Long, Account>();
+        Map<Long, Account> accountsMap = new HashMap<>();
         List<Account> list = getAllAccountsList();
         for (Account account : list) {
             accountsMap.put(account.id, account);
@@ -304,9 +244,9 @@ public abstract class MyEntityManager extends EntityManager {
         return accountsMap;
     }
 
-	/* ===============================================
-	 * CURRENCY
-	 * =============================================== */
+    /* ===============================================
+     * CURRENCY
+     * =============================================== */
 
     private static final String UPDATE_DEFAULT_FLAG = "update currency set is_default=0";
 
@@ -350,46 +290,47 @@ public abstract class MyEntityManager extends EntityManager {
         return entitiesAsTitleMap(getAllCurrenciesList("name"));
     }
 
-	/* ===============================================
-	 * TRANSACTIONS
-	 * =============================================== */
-
-//	public Cursor getBlotter(WhereFilter blotterFilter) {
-//		long t0 = System.currentTimeMillis();
-//		try {
-//			Query<TransactionInfo> q = createQuery(TransactionInfo.class);
-//			if (!blotterFilter.isEmpty()) {
-//				q.where(blotterFilter.toWhereExpression());
-//			}
-//			q.desc("dateTime");
-//			return q.list();
-//		} finally {
-//			Log.d("BLOTTER", "getBlotter executed in "+(System.currentTimeMillis()-t0)+"ms");
-//		}
-//	}
-//
-//	public Cursor getTransactions(WhereFilter blotterFilter) {
-//		return null;
-//	}
-
-//	public Cursor getAllProjects(boolean includeNoProject) {
-//		Query<Project> q = createQuery(Project.class);
-//		if (!includeNoProject) {
-//			q.where(Expressions.neq("id", 0));
-//		}
-//		return q.list();
-//	}
+    /* ===============================================
+     * TRANSACTIONS
+     * =============================================== */
 
     public Project getProject(long id) {
         return get(Project.class, id);
     }
 
     public ArrayList<Project> getAllProjectsList(boolean includeNoProject) {
-        return getAllEntitiesList(Project.class, includeNoProject);
+        ArrayList<Project> list = getAllEntitiesList(Project.class, includeNoProject, false, projectSort());
+        if (includeNoProject) {
+            addZeroEntity(list, Project.noProject());
+        }
+        return list;
+    }
+
+    public List<Project> getAllActiveProjectsList() {
+        return getAllEntitiesList(Project.class, true, true, projectSort());
     }
 
     public ArrayList<Project> getActiveProjectsList(boolean includeNoProject) {
-        return getAllEntitiesList(Project.class, includeNoProject, true);
+        return getAllEntitiesList(Project.class, includeNoProject, true, projectSort());
+    }
+
+    private Sort projectSort() {
+        return new Sort("title", true);
+    }
+
+    private <T extends MyEntity> void addZeroEntity(ArrayList<T> list, T zeroEntity) {
+        int zeroPos = -1;
+        for (int i=0; i<list.size(); i++) {
+            if (list.get(i).id == 0) {
+                zeroPos = i;
+                break;
+            }
+        }
+        if (zeroPos >= 0) {
+            list.add(0, list.remove(zeroPos));
+        } else {
+            list.add(0, zeroEntity);
+        }
     }
 
     public Map<String, Project> getAllProjectsByTitleMap(boolean includeNoProject) {
@@ -399,30 +340,6 @@ public abstract class MyEntityManager extends EntityManager {
     public Map<Long, Project> getAllProjectsByIdMap(boolean includeNoProject) {
         return entitiesAsIdMap(getAllProjectsList(includeNoProject));
     }
-
-//	public Category getCategoryByLeft(long left) {
-//		Query<Category> q = createQuery(Category.class);
-//		q.where(Expressions.eq("left", left));
-//		return q.uniqueResult();
-//	}
-//
-//	public Cursor getAllCategories(boolean includeNoCategory) {
-//		Query<CategoryInfo> q = createQuery(CategoryInfo.class);
-//		if (!includeNoCategory) {
-//			q.where(Expressions.neq("id", 0));
-//		}
-//		return q.list();
-//	}
-//	
-//	public Cursor getAllCategoriesWithoutSubtree(long id) {
-//		Category c = load(Category.class, id);
-//		Query<CategoryInfo> q = createQuery(CategoryInfo.class);
-//		q.where(Expressions.not(Expressions.and(
-//				Expressions.gte("left", c.left),
-//				Expressions.lte("right", c.right)
-//		)));
-//		return q.list();
-//	}
 
     public long insertBudget(Budget budget) {
         SQLiteDatabase db = db();
@@ -472,6 +389,20 @@ public abstract class MyEntityManager extends EntityManager {
             long start = c.getLongValue1();
             long end = c.getLongValue2();
             q.where(Expressions.and(Expressions.lte("startDate", end), Expressions.gte("endDate", start)));
+
+            switch (MyPreferences.getBudgetsSortOrder(context)) {
+                case DATE:
+                    q.desc("startDate");
+                    break;
+
+                case NAME:
+                    q.asc("title");
+                    break;
+
+                case AMOUNT:
+                    q.desc("amount");
+                    break;
+            }
         }
         try (Cursor cursor = q.execute()) {
             ArrayList<Budget> list = new ArrayList<>();
@@ -510,36 +441,51 @@ public abstract class MyEntityManager extends EntityManager {
     }
 
     public ArrayList<Category> getAllCategoriesList(boolean includeNoCategory) {
-        return getAllEntitiesList(Category.class, includeNoCategory);
+        return getAllEntitiesList(Category.class, includeNoCategory, false);
     }
 
-    public Payee insertPayee(String payee) {
-        if (Utils.isEmpty(payee)) {
-            return Payee.EMPTY;
+    public <T extends MyEntity> T findOrInsertEntityByTitle(Class<T> entityClass, String title) {
+        if (Utils.isEmpty(title)) {
+            return newEntity(entityClass);
         } else {
-            Payee p = getPayee(payee);
-            if (p == null) {
-                p = new Payee();
-                p.title = payee;
-                p.id = saveOrUpdate(p);
+            T e = findEntityByTitle(entityClass, title);
+            if (e == null) {
+                e = newEntity(entityClass);
+                e.title = title;
+                e.id = saveOrUpdate(e);
             }
-            return p;
+            return e;
         }
     }
 
-    public Payee getPayee(String payee) {
-        Query<Payee> q = createQuery(Payee.class);
-        q.where(Expressions.eq("title", payee));
+    private <T extends MyEntity> T newEntity(Class<T> entityClass) {
+        try {
+            return entityClass.newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    public <T extends MyEntity> T findEntityByTitle(Class<T> entityClass, String title) {
+        Query<T> q = createQuery(entityClass);
+        q.where(Expressions.eq("title", title));
         return q.uniqueResult();
     }
 
-    public Cursor getAllPayees() {
-        Query<Payee> q = createQuery(Payee.class);
-        return q.asc("title").execute();
+    public <T extends MyEntity> Cursor getAllEntities(Class<T> entityClass) {
+        return queryEntities(entityClass, null, false, false);
     }
 
     public List<Payee> getAllPayeeList() {
-        return getAllEntitiesList(Payee.class, true);
+        return getAllEntitiesList(Payee.class, true, false, payeeSort());
+    }
+
+    public List<Payee> getAllActivePayeeList() {
+        return getAllEntitiesList(Payee.class, true, true, payeeSort());
+    }
+
+    private Sort payeeSort() {
+        return new Sort("title", true);
     }
 
     public Map<String, Payee> getAllPayeeByTitleMap() {
@@ -550,13 +496,12 @@ public abstract class MyEntityManager extends EntityManager {
         return entitiesAsIdMap(getAllPayeeList());
     }
 
-    public Cursor getAllPayeesLike(CharSequence constraint) {
-        Query<Payee> q = createQuery(Payee.class);
-        q.where(Expressions.or(
-                Expressions.like("title", "%" + constraint + "%"),
-                Expressions.like("title", "%" + capitalize(constraint.toString()) + "%")
-        ));
-        return q.asc("title").execute();
+    public Cursor getAllPayeesLike(String constraint) {
+        return filterAllEntities(Payee.class, constraint);
+    }
+
+    public <T extends MyEntity> Cursor filterAllEntities(Class<T> entityClass, String titleFilter) {
+        return queryEntities(entityClass, StringUtil.emptyIfNull(titleFilter), false, false);
     }
 
     public List<Transaction> getSplitsForTransaction(long transactionId) {
@@ -598,7 +543,7 @@ public abstract class MyEntityManager extends EntityManager {
     }
 
     private static <T extends MyEntity> Map<String, T> entitiesAsTitleMap(List<T> entities) {
-        Map<String, T> map = new HashMap<String, T>();
+        Map<String, T> map = new HashMap<>();
         for (T e : entities) {
             map.put(e.title, e);
         }
@@ -606,7 +551,7 @@ public abstract class MyEntityManager extends EntityManager {
     }
 
     private static <T extends MyEntity> Map<Long, T> entitiesAsIdMap(List<T> entities) {
-        Map<Long, T> map = new HashMap<Long, T>();
+        Map<Long, T> map = new HashMap<>();
         for (T e : entities) {
             map.put(e.id, e);
         }

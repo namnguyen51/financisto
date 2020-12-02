@@ -81,6 +81,18 @@
         <item name="android:src">@drawable/ic_action_edit</item>
     </style>
 
+    <style name="FilterButton" parent="ListButton">
+        <item name="android:src">@drawable/actionbar_filter</item>
+    </style>
+
+    <style name="FilterCancelButton" parent="ListButton">
+        <item name="android:src">@drawable/actionbar_filter_cancel</item>
+    </style>
+
+    <style name="ShowListButton" parent="ListButton">
+        <item name="android:src">@drawable/ic_action_list</item>
+    </style>
+
     <style name="DeleteButton" parent="ListButton">
         <item name="android:src">@drawable/ic_action_trash</item>
     </style>
@@ -131,11 +143,17 @@
         <item name="android:maxHeight">12dip</item>
     </style>
 
+    <style name="BottomBar">
+        <item name="android:layout_width">fill_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@color/holo_gray_dark</item>
+        <item name="android:minHeight">@dimen/action_button_size</item>
+    </style>
+
     <style name="BottomBarButton">
-        <item name="android:background">@android:drawable/list_selector_background</item>
+        <item name="android:background"></item>
         <item name="android:layout_width">@dimen/action_button_size</item>
         <item name="android:layout_height">@dimen/action_button_size</item>
-        <item name="android:tint">@color/bottom_bar_tint</item>
     </style>
 
     <style name="CalculatorButton">

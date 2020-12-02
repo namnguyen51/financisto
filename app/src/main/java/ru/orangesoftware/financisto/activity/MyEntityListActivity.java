@@ -14,30 +14,42 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.View;
+import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.ListAdapter;
 import android.widget.TextView;
+
+import java.util.List;
 
 import ru.orangesoftware.financisto.R;
 import ru.orangesoftware.financisto.adapter.EntityListAdapter;
 import ru.orangesoftware.financisto.filter.Criteria;
 import ru.orangesoftware.financisto.model.MyEntity;
 import ru.orangesoftware.financisto.utils.MyPreferences;
-
-import java.util.List;
+import ru.orangesoftware.financisto.widget.SearchFilterTextWatcherListener;
 
 public abstract class MyEntityListActivity<T extends MyEntity> extends AbstractListActivity {
 
     private static final int NEW_ENTITY_REQUEST = 1;
     private static final int EDIT_ENTITY_REQUEST = 2;
 
+    public static final int FILTER_DELAY_MILLIS = 500;
+
     private final Class<T> clazz;
     private final int emptyResId;
 
     private List<T> entities;
+    private EditText searchFilter;
+    protected volatile String titleFilter;
 
     public MyEntityListActivity(Class<T> clazz, int emptyResId) {
-        super(R.layout.project_list);
+        this(clazz, R.layout.entity_list, emptyResId);
+    }
+
+    private MyEntityListActivity(Class<T> clazz, int layoutId, int emptyResId) {
+        super(layoutId);
         this.clazz = clazz;
         this.emptyResId = emptyResId;
     }
@@ -50,11 +62,36 @@ public abstract class MyEntityListActivity<T extends MyEntity> extends AbstractL
     @Override
     protected void internalOnCreate(Bundle savedInstanceState) {
         super.internalOnCreate(savedInstanceState);
-        entities = loadEntities();
+        loadEntities();
         ((TextView) findViewById(android.R.id.empty)).setText(emptyResId);
+        searchFilter = findViewById(R.id.searchFilter);
+        CheckBox view = findViewById(R.id.toggleInactive);
+        view.setOnCheckedChangeListener((buttonView, isChecked) -> recreateCursor());
+        if (searchFilter != null) {
+            searchFilter.addTextChangedListener(new SearchFilterTextWatcherListener(FILTER_DELAY_MILLIS) {
+                @Override
+                public void clearFilter(String oldFilter) {
+                    titleFilter = null;
+                }
+
+                @Override
+                public void applyFilter(String filter) {
+                    if (!TextUtils.isEmpty(filter)) titleFilter = filter;
+                    recreateCursor();
+                }
+            });
+        }
     }
 
-    protected abstract List<T> loadEntities();
+    protected void loadEntities() {
+        CheckBox view = findViewById(R.id.toggleInactive);
+        boolean showInactive = view.isChecked();
+        this.entities = loadEntities(!showInactive);
+    }
+
+    private List<T> loadEntities(boolean onlyActive) {
+        return db.getAllEntitiesList(clazz, false, onlyActive, titleFilter);
+    }
 
     @Override
     protected void addItem() {
@@ -76,7 +113,7 @@ public abstract class MyEntityListActivity<T extends MyEntity> extends AbstractL
 
     @Override
     public void recreateCursor() {
-        entities = loadEntities();
+        loadEntities();
         @SuppressWarnings("unchecked")
         EntityListAdapter<T> a = (EntityListAdapter<T>) adapter;
         a.setEntities(entities);

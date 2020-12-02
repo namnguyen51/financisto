@@ -14,7 +14,7 @@ package ru.orangesoftware.financisto.activity;
 import android.content.Intent;
 import android.database.Cursor;
 import android.os.Bundle;
-import android.support.v4.content.ContextCompat;
+import androidx.core.content.ContextCompat;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.view.View;
@@ -85,6 +85,7 @@ public class AccountActivity extends AbstractActivity {
         setContentView(R.layout.account);
 
         accountTitle = new EditText(this);
+        accountTitle.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         accountTitle.setSingleLine();
 
         issuerName = new EditText(this);
@@ -173,6 +174,7 @@ public class AccountActivity extends AbstractActivity {
         }
 
         noteText = new EditText(this);
+        noteText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         noteText.setLines(2);
         x.addEditNode(layout, R.string.note, noteText);
 

@@ -1,20 +1,10 @@
-/*******************************************************************************
- * Copyright (c) 2010 Denis Solonenko.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the GNU Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
- *
- * Contributors:
- *     Denis Solonenko - initial API and implementation
- ******************************************************************************/
 package ru.orangesoftware.financisto.activity;
 
-import static android.Manifest.permission.RECEIVE_SMS;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.database.Cursor;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
@@ -26,17 +16,21 @@ import android.widget.ScrollView;
 import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 import android.widget.ToggleButton;
+
 import java.util.ArrayList;
 import java.util.List;
+
 import ru.orangesoftware.financisto.R;
-import static ru.orangesoftware.financisto.activity.CategorySelector.SelectorType.PARENT;
-import static ru.orangesoftware.financisto.activity.RequestPermission.isRequestingPermission;
 import ru.orangesoftware.financisto.db.DatabaseHelper.AttributeColumns;
 import ru.orangesoftware.financisto.db.DatabaseHelper.CategoryColumns;
 import ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateColumns;
 import ru.orangesoftware.financisto.model.Attribute;
 import ru.orangesoftware.financisto.model.Category;
 import ru.orangesoftware.financisto.model.SmsTemplate;
+
+import static android.Manifest.permission.RECEIVE_SMS;
+import static ru.orangesoftware.financisto.activity.CategorySelector.SelectorType.PARENT;
+import static ru.orangesoftware.financisto.activity.RequestPermission.isRequestingPermission;
 import static ru.orangesoftware.financisto.utils.Utils.checkEditText;
 import static ru.orangesoftware.financisto.utils.Utils.text;
 
@@ -76,6 +70,7 @@ public class CategoryActivity extends AbstractActivity implements CategorySelect
         scrollView = findViewById(R.id.scroll);
 
         categoryTitle = new EditText(this);
+        categoryTitle.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         categoryTitle.setSingleLine();
 
         Intent intent = getIntent();
@@ -143,7 +138,7 @@ public class CategoryActivity extends AbstractActivity implements CategorySelect
     }
 
     private CategorySelector initParentCategorySelector() {
-        final CategorySelector res = new CategorySelector(this, db, x, category.id);
+        final CategorySelector res = new CategorySelector<>(this, db, x, category.id);
         LinearLayout layout = findViewById(R.id.layout);
         res.createNode(layout, PARENT);
         res.setListener(this);
@@ -259,6 +254,9 @@ public class CategoryActivity extends AbstractActivity implements CategorySelect
     protected void onClick(final View v, final int id) {
         switch (id) {
             case R.id.category:
+            case R.id.category_show_filter:
+            case R.id.category_close_filter:
+            case R.id.category_show_list:
                 parentCatSelector.onClick(R.id.category);
                 break;
 

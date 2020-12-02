@@ -17,93 +17,25 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.util.Log;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import org.androidannotations.annotations.EBean;
-
 import ru.orangesoftware.financisto.R;
 import ru.orangesoftware.financisto.blotter.BlotterFilter;
 import ru.orangesoftware.financisto.datetime.DateUtils;
-
-import static ru.orangesoftware.financisto.db.DatabaseHelper.ACCOUNT_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.ATTRIBUTES_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.AccountColumns;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.AttributeColumns;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.AttributeViewColumns;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.BlotterColumns;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.CATEGORY_ATTRIBUTE_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.CATEGORY_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.CCARD_CLOSING_DATE_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.CategoryAttributeColumns;
-
-import ru.orangesoftware.financisto.db.DatabaseHelper.CategoryColumns;
-
-import static ru.orangesoftware.financisto.db.DatabaseHelper.CategoryViewColumns;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.CreditCardClosingDateColumns;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.EXCHANGE_RATES_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.ExchangeRateColumns;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.LOCATIONS_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.PAYEE_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.SMS_TEMPLATES_TABLE;
-
-import ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateColumns;
-
-import static ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateColumns.NORMAL_PROJECTION;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateColumns._id;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateColumns.category_id;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateColumns.template;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateColumns.title;
-
-import ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateListColumns;
-
-import static ru.orangesoftware.financisto.db.DatabaseHelper.TRANSACTION_ATTRIBUTE_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.TRANSACTION_TABLE;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.TransactionAttributeColumns;
-
-import ru.orangesoftware.financisto.db.DatabaseHelper.TransactionColumns;
-
-import static ru.orangesoftware.financisto.db.DatabaseHelper.V_ALL_TRANSACTIONS;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.V_ATTRIBUTES;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.V_BLOTTER;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.V_BLOTTER_FLAT_SPLITS;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.V_BLOTTER_FOR_ACCOUNT_WITH_SPLITS;
-import static ru.orangesoftware.financisto.db.DatabaseHelper.V_CATEGORY;
-
+import ru.orangesoftware.financisto.db.DatabaseHelper.*;
 import ru.orangesoftware.financisto.filter.Criteria;
 import ru.orangesoftware.financisto.filter.WhereFilter;
-import ru.orangesoftware.financisto.model.Account;
-import ru.orangesoftware.financisto.model.Attribute;
-import ru.orangesoftware.financisto.model.Budget;
-import ru.orangesoftware.financisto.model.Category;
-import ru.orangesoftware.financisto.model.CategoryTree;
+import ru.orangesoftware.financisto.model.*;
 import ru.orangesoftware.financisto.model.Currency;
-import ru.orangesoftware.financisto.model.MyLocation;
-import ru.orangesoftware.financisto.model.Payee;
-import ru.orangesoftware.financisto.model.Project;
-import ru.orangesoftware.financisto.model.RestoredTransaction;
-import ru.orangesoftware.financisto.model.SmsTemplate;
-import ru.orangesoftware.financisto.model.SystemAttribute;
-import ru.orangesoftware.financisto.model.Total;
-import ru.orangesoftware.financisto.model.TotalError;
-import ru.orangesoftware.financisto.model.Transaction;
-import ru.orangesoftware.financisto.model.TransactionAttribute;
-import ru.orangesoftware.financisto.model.TransactionStatus;
-import ru.orangesoftware.financisto.rates.ExchangeRate;
-import ru.orangesoftware.financisto.rates.ExchangeRateProvider;
-import ru.orangesoftware.financisto.rates.ExchangeRatesCollection;
-import ru.orangesoftware.financisto.rates.HistoryExchangeRates;
-import ru.orangesoftware.financisto.rates.LatestExchangeRates;
+import ru.orangesoftware.financisto.rates.*;
+import ru.orangesoftware.financisto.utils.ArrUtils;
+import ru.orangesoftware.financisto.utils.StringUtil;
+
+import java.math.BigDecimal;
+import java.util.*;
+
+import static ru.orangesoftware.financisto.db.DatabaseHelper.*;
+import static ru.orangesoftware.financisto.db.DatabaseHelper.SmsTemplateColumns.*;
+import static ru.orangesoftware.financisto.utils.StringUtil.generateQueryPlaceholders;
 
 @EBean(scope = EBean.Scope.Singleton)
 public class DatabaseAdapter extends MyEntityManager {
@@ -219,12 +151,12 @@ public class DatabaseAdapter extends MyEntityManager {
         return sortOrder;
     }
 
-    public Cursor getAllTemplates(WhereFilter filter) {
+    public Cursor getAllTemplates(WhereFilter filter, String sortBy) {
         long t0 = System.currentTimeMillis();
         try {
             return db().query(V_ALL_TRANSACTIONS, BlotterColumns.NORMAL_PROJECTION,
                     filter.getSelection(), filter.getSelectionArgs(), null, null,
-                    BlotterFilter.SORT_NEWER_TO_OLDER);
+                    sortBy);
         } finally {
             long t1 = System.currentTimeMillis();
             Log.i("DB", "getBlotter " + (t1 - t0) + "ms");
@@ -742,6 +674,19 @@ public class DatabaseAdapter extends MyEntityManager {
         }
     }
 
+    public List<Long> getCategoryIdsByLeftIds(List<String> leftIds) {
+        SQLiteDatabase db = db();
+        List<Long> res = new LinkedList<>();
+        try (Cursor c = db.query(V_CATEGORY, new String[]{CategoryViewColumns._id.name()},
+                CategoryViewColumns.left + " IN (" + generateQueryPlaceholders(leftIds.size()) + ")",
+                ArrUtils.strListToArr(leftIds), null, null, null)) {
+            while (c.moveToNext()) {
+                res.add(c.getLong(0));
+            }
+        }
+        return res;
+    }
+    
     public Category getCategoryByLeft(long left) {
         SQLiteDatabase db = db();
         try (Cursor c = db.query(V_CATEGORY, CategoryViewColumns.NORMAL_PROJECTION,
@@ -802,8 +747,27 @@ public class DatabaseAdapter extends MyEntityManager {
     }
 
     public Cursor getCategories(boolean includeNoCategory) {
-        return db().query(V_CATEGORY, CategoryViewColumns.NORMAL_PROJECTION,
-                CategoryViewColumns._id + (includeNoCategory ? ">=0" : ">0"), null, null, null, null);
+        return getCategories(includeNoCategory, null);
+    }
+
+    public Cursor filterCategories(CharSequence titleFilter) {
+        return getCategories(false, titleFilter);
+    }
+        
+    
+    public Cursor getCategories(boolean includeNoCategory, CharSequence titleFilter) {
+        String query = CategoryViewColumns._id + (includeNoCategory ? ">=0" : ">0");
+        String[] args = null;
+        if (titleFilter != null) {
+            query += " and (" + CategoryViewColumns.title + " like ? or " + CategoryViewColumns.title + " like ? )";
+            args = new String[]{
+                    "%" + titleFilter + "%", 
+                    "%" + StringUtil.capitalize(titleFilter.toString()) + "%"};
+        }
+        return db().query(V_CATEGORY, 
+                CategoryViewColumns.NORMAL_PROJECTION,
+                query,
+                args, null, null, null);
     }
 
     public Cursor getCategoriesWithoutSubtree(long id, boolean includeNoCategory) {
@@ -1031,21 +995,10 @@ public class DatabaseAdapter extends MyEntityManager {
     }
 
     public List<SmsTemplate> getSmsTemplatesByNumber(String smsNumber) {
-        try (Cursor c = db().query(SMS_TEMPLATES_TABLE, NORMAL_PROJECTION, title + "=?",
-                new String[]{smsNumber}, null, null, title.name())) {
-            List<SmsTemplate> res = new ArrayList<>(c.getCount());
-            while (c.moveToNext()) {
-                SmsTemplate a = SmsTemplate.fromCursor(c);
-                res.add(a);
-            }
-            return res;
-        }
-    }
-
-    public List<SmsTemplate> getSmsTemplatesByNumber2(String smsNumber) {
         try (Cursor c = db().rawQuery(
-                String.format("select %s from %s where %s=? order by length(%s) desc, %s",
-                        DatabaseUtils.generateSelectClause(NORMAL_PROJECTION, null), SMS_TEMPLATES_TABLE, title, template, _id), new String[]{smsNumber})) {
+                String.format("select %s from %s where %s=? order by %s, length(%s) desc",
+                    DatabaseUtils.generateSelectClause(NORMAL_PROJECTION, null),
+                    SMS_TEMPLATES_TABLE, title, sort_order, template), new String[]{smsNumber})) {
             List<SmsTemplate> res = new ArrayList<>(c.getCount());
             while (c.moveToNext()) {
                 SmsTemplate a = SmsTemplate.fromCursor(c);
@@ -1072,19 +1025,37 @@ public class DatabaseAdapter extends MyEntityManager {
     }
 
     public Cursor getSmsTemplatesWithFullInfo() {
+        return getSmsTemplatesWithFullInfo(null);
+    }
+    
+    public Cursor getSmsTemplatesWithFullInfo(final String filter) {
         String nativeQuery = String.format(
-                "select %s, c.%s as %s, c.%s as %s from %s t left outer join %s c on t.%s = c.%s order by t.%s, length(t.%s) desc, t.%s",
+                "select %s, c.%s as %s, c.%s as %s " +
+                "from %s t left outer join %s c on t.%s = c.%s ",
                 DatabaseUtils.generateSelectClause(NORMAL_PROJECTION, "t"),
                 CategoryViewColumns.title, SmsTemplateListColumns.cat_name, CategoryViewColumns.level, SmsTemplateListColumns.cat_level,
                 SMS_TEMPLATES_TABLE,
                 V_CATEGORY,
-                category_id, CategoryViewColumns._id,
-                SmsTemplateColumns.title, SmsTemplateColumns.template, SmsTemplateColumns._id
-        );
+                category_id, CategoryViewColumns._id);
+        if (!StringUtil.isEmpty(filter)) {
+            nativeQuery += String.format("where t.%s like '%%%s%%' or t.%s like '%%%2$s%%' ",
+                    CategoryViewColumns.title, filter, SmsTemplateColumns.template);
+        }
+        nativeQuery += "order by t." + sort_order;
+        
         return db().rawQuery(nativeQuery, new String[]{});
     }
 
-// ===================================================================
+    public long duplicateSmsTemplateBelowOriginal(long id) {
+        long newId = duplicate(SmsTemplate.class, id);
+        long nextOrderItem = getNextByOrder(SmsTemplate.class, id);
+        if (nextOrderItem > 0) {
+            moveItemByChangingOrder(SmsTemplate.class, newId, nextOrderItem);
+        }
+        return newId;
+    }
+
+    // ===================================================================
     // ATTRIBUTES
     // ===================================================================
 
@@ -1770,7 +1741,7 @@ public class DatabaseAdapter extends MyEntityManager {
         newTransaction.fromAccountId = account.id;
         newTransaction.dateTime = DateUtils.atDayEnd(nearestTransaction.dateTime);
         newTransaction.fromAmount = balance;
-        Payee payee = insertPayee(context.getString(R.string.purge_account_payee));
+        Payee payee = findOrInsertEntityByTitle(Payee.class, context.getString(R.string.purge_account_payee));
         newTransaction.payeeId = payee != null ? payee.id : 0;
         newTransaction.status = TransactionStatus.CL;
         return newTransaction;
@@ -1875,6 +1846,5 @@ public class DatabaseAdapter extends MyEntityManager {
         return DatabaseUtils.rawFetchLongValue(this, "select balance from running_balance where account_id=? order by datetime desc, transaction_id desc limit 1",
                 new String[]{String.valueOf(account.id)});
     }
-
 }
 

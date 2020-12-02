@@ -12,8 +12,6 @@ package ru.orangesoftware.financisto.activity;
 
 import android.view.View;
 
-import java.util.List;
-
 import ru.orangesoftware.financisto.R;
 import ru.orangesoftware.financisto.blotter.BlotterFilter;
 import ru.orangesoftware.financisto.filter.Criteria;
@@ -26,12 +24,7 @@ public class LocationsListActivity extends MyEntityListActivity<MyLocation> {
     }
 
     @Override
-    protected List<MyLocation> loadEntities() {
-        return db.getAllLocationsList(false);
-    }
-
-    @Override
-    protected Class getEditActivityClass() {
+    protected Class<LocationActivity> getEditActivityClass() {
         return LocationActivity.class;
     }
 
